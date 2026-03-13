@@ -10,7 +10,7 @@ st.title("📊 Dashboard de Control de Multas - Inspección del Trabajo")
 @st.cache_data
 def load_data():
     # Cargar archivo saltando las filas de encabezado vacías
-    df = pd.read_csv("MULTAS.csv", skiprows=4)
+    df = pd.read_csv("MULTAS.csv", skiprows=4, encoding="latin-1", on_bad_lines="skip")
     
     # Limpieza básica
     df = df.dropna(subset=['Costo Monetario', 'Año']).copy()
@@ -92,3 +92,4 @@ st.divider()
 st.subheader("📑 Detalle de Multas")
 
 st.dataframe(df_filtrado[['Año', 'Región', 'Ciudad', 'Resolución', 'Tipo de Infracción', 'Estado Actual', 'Responsable', 'Costo Monetario Real']])
+
