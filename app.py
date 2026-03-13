@@ -54,8 +54,33 @@ def cargar_datos_inteligente():
     df['Estado Actual'] = df['Estado Actual'].replace({'PAGADO': 'PAGADA', 'SIN EFECTO': 'DEJA SIN EFECTO'})
     df['Responsable'] = df['Responsable'].astype(str).str.upper().str.strip()
     
-    # Corregir el Costo Monetario
-    df['Costo Monetario Real'] = pd.to_numeric(df['Costo Monetario'], errors='coerce') 
+   # ---------------- TRADUCTOR DE NÚMEROS (FORMATO CHILENO A NUBE) ----------------
+    def arreglar_numeros(val):
+        val = str(val).strip()
+        if val in ['nan', 'None', '', 'NaN']: return None
+        
+        # Si tiene puntos y comas (ej: 2.500,50)
+        if ',' in val and '.' in val:
+            if val.rfind(',') > val.rfind('.'): # Formato Chile
+                val = val.replace('.', '').replace(',', '.')
+            else: # Formato Inglés
+                val = val.replace(',', '')
+        elif ',' in val: # Solo coma (ej: 2500,50)
+            val = val.replace(',', '.')
+        elif '.' in val: # Solo punto (ej: 2.500 o 2500.50)
+            partes = val.split('.')
+            if len(partes) == 2 and len(partes[1]) <= 2:
+                pass # Es decimal, lo dejamos igual
+            else:
+                val = val.replace('.', '') # Era un separador de miles, lo quitamos
+                
+        try:
+            return float(val)
+        except:
+            return None
+
+    # Aplicamos el traductor al Costo Monetario para recuperar los millones reales
+    df['Costo Monetario Real'] = df['Costo Monetario'].apply(arreglar_numeros)
     df = df.dropna(subset=['Costo Monetario Real'])
     
     return df
@@ -123,4 +148,5 @@ st.subheader("📑 Detalle de Multas")
 # Mostramos las columnas más relevantes si existen
 columnas_mostrar = [col for col in ['Año', 'Región', 'Ciudad', 'Resolución', 'Tipo de Infracción', 'Estado Actual', 'Responsable', 'Costo Monetario Real'] if col in df_filtrado.columns]
 st.dataframe(df_filtrado[columnas_mostrar])
+
 
