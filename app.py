@@ -55,7 +55,7 @@ def cargar_datos_inteligente():
     df['Responsable'] = df['Responsable'].astype(str).str.upper().str.strip()
     
     # Corregir el Costo Monetario
-    df['Costo Monetario Real'] = pd.to_numeric(df['Costo Monetario'], errors='coerce') / 10
+    df['Costo Monetario Real'] = pd.to_numeric(df['Costo Monetario'], errors='coerce') 
     df = df.dropna(subset=['Costo Monetario Real'])
     
     return df
@@ -123,3 +123,4 @@ st.subheader("📑 Detalle de Multas")
 # Mostramos las columnas más relevantes si existen
 columnas_mostrar = [col for col in ['Año', 'Región', 'Ciudad', 'Resolución', 'Tipo de Infracción', 'Estado Actual', 'Responsable', 'Costo Monetario Real'] if col in df_filtrado.columns]
 st.dataframe(df_filtrado[columnas_mostrar])
+
