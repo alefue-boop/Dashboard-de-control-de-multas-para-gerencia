@@ -8,57 +8,69 @@ st.title("📊 Dashboard de Control de Multas - Inspección del Trabajo")
 
 # 2. Función para cargar y limpiar los datos automáticamente
 @st.cache_data
-def load_data():
-    # 1. Intentar leer el archivo normal (separado por comas y saltando 4 filas)
-    df = pd.read_csv("MULTAS.csv", skiprows=4, encoding="latin-1", on_bad_lines="skip")
+def cargar_datos_inteligente():
+    # Lista de todas las combinaciones posibles en las que Excel pudo guardar tu archivo
+    opciones = [
+        {"skiprows": 4, "sep": ",", "encoding": "utf-8"},
+        {"skiprows": 4, "sep": ",", "encoding": "latin-1"},
+        {"skiprows": 0, "sep": ",", "encoding": "utf-8"},
+        {"skiprows": 0, "sep": ",", "encoding": "latin-1"},
+        {"skiprows": 0, "sep": ";", "encoding": "utf-8"},
+        {"skiprows": 0, "sep": ";", "encoding": "latin-1"}
+    ]
     
-    # 2. Si no encuentra la columna 'Año', intentamos con punto y coma (formato Excel Chile)
-    if 'Año' not in df.columns:
-        df = pd.read_csv("MULTAS.csv", skiprows=4, sep=";", encoding="latin-1", on_bad_lines="skip")
-        
-    # 3. Si aún no la encuentra, es porque se borraron las filas vacías de arriba al guardar
-    if 'Año' not in df.columns:
-        df = pd.read_csv("MULTAS.csv", sep=";", encoding="latin-1", on_bad_lines="skip")
-        if 'Año' not in df.columns:
-            df = pd.read_csv("MULTAS.csv", encoding="latin-1", on_bad_lines="skip")
+    df_final = None
+    
+    # El sistema probará una por una hasta que funcione
+    for config in opciones:
+        try:
+            df = pd.read_csv("MULTAS.csv", 
+                             skiprows=config["skiprows"], 
+                             sep=config["sep"], 
+                             encoding=config["encoding"], 
+                             on_bad_lines="skip")
             
-    # Limpiar espacios ocultos en los nombres de las columnas
-    df.columns = df.columns.str.strip()
+            # Limpiamos los nombres de las columnas por si tienen espacios ocultos
+            df.columns = df.columns.str.strip()
+            
+            # Arreglamos el problema de la "ñ" si el sistema gringo la leyó mal (ej: AÃ±o)
+            for col in df.columns:
+                if 'A' in col and 'o' in col and len(col) <= 4:
+                    df.rename(columns={col: 'Año'}, inplace=True)
+            
+            # Si encuentra nuestras dos columnas vitales, detiene la búsqueda ¡Éxito!
+            if 'Costo Monetario' in df.columns and 'Año' in df.columns:
+                df_final = df
+                break 
+        except:
+            continue
+            
+    # Si después de probar todo no lo logra, mostrará un mensaje de error amigable
+    if df_final is None:
+        st.error("🚨 No se encontraron las columnas. Verifica que el archivo en GitHub se llame MULTAS.csv")
+        st.stop()
+        
+    df = df_final
     
-    # Limpieza básica
+    # ---------------- LIMPIEZA DE DATOS PARA RRHH ----------------
     df = df.dropna(subset=['Costo Monetario', 'Año']).copy()
-    df['Año'] = df['Año'].astype(int).astype(str) # Convertir a texto para filtros
     
-    # Estandarizar textos
+    # Limpiamos el Año (ej: de 2012.0 a "2012") para que el filtro de gerencia se vea bien
+    df['Año'] = pd.to_numeric(df['Año'], errors='coerce').fillna(0).astype(int).astype(str)
+    
+    # Estandarizar textos de RRHH y Prevención
     df['Estado Actual'] = df['Estado Actual'].astype(str).str.upper().str.strip()
     df['Estado Actual'] = df['Estado Actual'].replace({'PAGADO': 'PAGADA', 'SIN EFECTO': 'DEJA SIN EFECTO'})
     df['Responsable'] = df['Responsable'].astype(str).str.upper().str.strip()
     
-    # Corregir el costo monetario
+    # Corregir el Costo Monetario (el famoso cero de más)
     df['Costo Monetario Real'] = pd.to_numeric(df['Costo Monetario'], errors='coerce') / 10
-    
-    # Eliminar posibles filas que quedaron sin costo después de la conversión
     df = df.dropna(subset=['Costo Monetario Real'])
     
     return df
-    df.columns = df.columns.str.strip()
-    
-    # Limpieza básica
-    df = df.dropna(subset=['Costo Monetario', 'Año']).copy()
-    df['Año'] = df['Año'].astype(int).astype(str) # Convertir a texto para filtros
-    
-    # Estandarizar textos
-    df['Estado Actual'] = df['Estado Actual'].astype(str).str.upper().str.strip()
-    df['Estado Actual'] = df['Estado Actual'].replace({'PAGADO': 'PAGADA', 'SIN EFECTO': 'DEJA SIN EFECTO'})
-    df['Responsable'] = df['Responsable'].astype(str).str.upper().str.strip()
-    
-    # Corregir el costo monetario
-    df['Costo Monetario Real'] = pd.to_numeric(df['Costo Monetario'], errors='coerce') / 10
-    
-    # Eliminar posibles filas que quedaron sin costo después de la conversión
-    df = df.dropna(subset=['Costo Monetario Real'])
-    
-    return df
+
+# Ejecutamos nuestra nueva función inteligente
+df = cargar_datos_inteligente()
 
 df = load_data()
 
@@ -127,6 +139,7 @@ st.divider()
 st.subheader("📑 Detalle de Multas")
 
 st.dataframe(df_filtrado[['Año', 'Región', 'Ciudad', 'Resolución', 'Tipo de Infracción', 'Estado Actual', 'Responsable', 'Costo Monetario Real']])
+
 
 
 
