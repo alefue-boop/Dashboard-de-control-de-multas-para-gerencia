@@ -6,10 +6,9 @@ import plotly.express as px
 st.set_page_config(page_title="Dashboard Multas RRHH", page_icon="📊", layout="wide")
 st.title("📊 Dashboard de Control de Multas - Inspección del Trabajo")
 
-# 2. Función para cargar y limpiar los datos automáticamente
+# 2. Función Inteligente para cargar datos (A prueba de errores de Excel/CSV)
 @st.cache_data
 def cargar_datos_inteligente():
-    # Lista de todas las combinaciones posibles en las que Excel pudo guardar tu archivo
     opciones = [
         {"skiprows": 4, "sep": ",", "encoding": "utf-8"},
         {"skiprows": 4, "sep": ",", "encoding": "latin-1"},
@@ -21,7 +20,6 @@ def cargar_datos_inteligente():
     
     df_final = None
     
-    # El sistema probará una por una hasta que funcione
     for config in opciones:
         try:
             df = pd.read_csv("MULTAS.csv", 
@@ -29,52 +27,43 @@ def cargar_datos_inteligente():
                              sep=config["sep"], 
                              encoding=config["encoding"], 
                              on_bad_lines="skip")
-            
-            # Limpiamos los nombres de las columnas por si tienen espacios ocultos
             df.columns = df.columns.str.strip()
             
-            # Arreglamos el problema de la "ñ" si el sistema gringo la leyó mal (ej: AÃ±o)
+            # Arreglar la columna Año si tiene caracteres raros
             for col in df.columns:
                 if 'A' in col and 'o' in col and len(col) <= 4:
                     df.rename(columns={col: 'Año'}, inplace=True)
             
-            # Si encuentra nuestras dos columnas vitales, detiene la búsqueda ¡Éxito!
             if 'Costo Monetario' in df.columns and 'Año' in df.columns:
                 df_final = df
                 break 
         except:
             continue
             
-    # Si después de probar todo no lo logra, mostrará un mensaje de error amigable
     if df_final is None:
-        st.error("🚨 No se encontraron las columnas. Verifica que el archivo en GitHub se llame MULTAS.csv")
+        st.error("🚨 No se encontró el formato correcto. Verifica que el archivo en GitHub se llame MULTAS.csv")
         st.stop()
         
     df = df_final
     
     # ---------------- LIMPIEZA DE DATOS PARA RRHH ----------------
     df = df.dropna(subset=['Costo Monetario', 'Año']).copy()
-    
-    # Limpiamos el Año (ej: de 2012.0 a "2012") para que el filtro de gerencia se vea bien
     df['Año'] = pd.to_numeric(df['Año'], errors='coerce').fillna(0).astype(int).astype(str)
     
-    # Estandarizar textos de RRHH y Prevención
     df['Estado Actual'] = df['Estado Actual'].astype(str).str.upper().str.strip()
     df['Estado Actual'] = df['Estado Actual'].replace({'PAGADO': 'PAGADA', 'SIN EFECTO': 'DEJA SIN EFECTO'})
     df['Responsable'] = df['Responsable'].astype(str).str.upper().str.strip()
     
-    # Corregir el Costo Monetario (el famoso cero de más)
+    # Corregir el Costo Monetario
     df['Costo Monetario Real'] = pd.to_numeric(df['Costo Monetario'], errors='coerce') / 10
     df = df.dropna(subset=['Costo Monetario Real'])
     
     return df
 
-# Ejecutamos nuestra nueva función inteligente
+# Ejecutar la carga de datos
 df = cargar_datos_inteligente()
 
-df = load_data()
-
-# 3. Barra Lateral (Filtros interactivos para las Jefaturas)
+# 3. Barra Lateral (Filtros interactivos)
 st.sidebar.header("Filtros del Dashboard")
 anio_filtro = st.sidebar.multiselect("Seleccionar Año:", options=sorted(df['Año'].unique()), default=sorted(df['Año'].unique()))
 resp_filtro = st.sidebar.multiselect("Seleccionar Responsable:", options=df['Responsable'].dropna().unique(), default=df['Responsable'].dropna().unique())
@@ -103,44 +92,34 @@ st.divider()
 col_graf1, col_graf2 = st.columns(2)
 
 with col_graf1:
-    # Gasto por Año
     gasto_anio = df_filtrado.groupby('Año')['Costo Monetario Real'].sum().reset_index()
-    fig_anio = px.bar(gasto_anio, x='Año', y='Costo Monetario Real', 
-                      title="Gasto Total por Año", text_auto='.2s', color_discrete_sequence=['#1f77b4'])
+    fig_anio = px.bar(gasto_anio, x='Año', y='Costo Monetario Real', title="Gasto Total por Año", text_auto='.2s', color_discrete_sequence=['#1f77b4'])
     st.plotly_chart(fig_anio, use_container_width=True)
 
 with col_graf2:
-    # Gasto por Responsable
     gasto_resp = df_filtrado.groupby('Responsable')['Costo Monetario Real'].sum().reset_index()
-    fig_resp = px.pie(gasto_resp, values='Costo Monetario Real', names='Responsable', 
-                      title="Distribución de Gasto por Responsable", hole=0.4)
+    fig_resp = px.pie(gasto_resp, values='Costo Monetario Real', names='Responsable', title="Distribución de Gasto por Departamento", hole=0.4)
     st.plotly_chart(fig_resp, use_container_width=True)
 
 col_graf3, col_graf4 = st.columns(2)
 
 with col_graf3:
-    # Top Ciudades
-    gasto_ciudad = df_filtrado.groupby('Ciudad')['Costo Monetario Real'].sum().reset_index().sort_values(by='Costo Monetario Real', ascending=False).head(10)
-    fig_ciudad = px.bar(gasto_ciudad, x='Costo Monetario Real', y='Ciudad', orientation='h',
-                        title="Top 10 Ciudades con Mayor Gasto", color='Costo Monetario Real', color_continuous_scale='Reds')
-    st.plotly_chart(fig_ciudad, use_container_width=True)
+    if 'Ciudad' in df_filtrado.columns:
+        gasto_ciudad = df_filtrado.groupby('Ciudad')['Costo Monetario Real'].sum().reset_index().sort_values(by='Costo Monetario Real', ascending=False).head(10)
+        fig_ciudad = px.bar(gasto_ciudad, x='Costo Monetario Real', y='Ciudad', orientation='h', title="Top 10 Ciudades con Mayor Gasto", color='Costo Monetario Real', color_continuous_scale='Reds')
+        st.plotly_chart(fig_ciudad, use_container_width=True)
 
 with col_graf4:
-    # Top Tipos de Infracción (Frecuencia)
-    infracciones = df_filtrado['Tipo de Infracción'].value_counts().reset_index().head(5)
-    infracciones.columns = ['Tipo de Infracción', 'Cantidad']
-    fig_infraccion = px.bar(infracciones, x='Cantidad', y='Tipo de Infracción', orientation='h',
-                            title="Top 5 Infracciones más Frecuentes", color_discrete_sequence=['#ff7f0e'])
-    st.plotly_chart(fig_infraccion, use_container_width=True)
+    if 'Tipo de Infracción' in df_filtrado.columns:
+        infracciones = df_filtrado['Tipo de Infracción'].value_counts().reset_index().head(5)
+        infracciones.columns = ['Tipo de Infracción', 'Cantidad']
+        fig_infraccion = px.bar(infracciones, x='Cantidad', y='Tipo de Infracción', orientation='h', title="Top 5 Infracciones más Frecuentes", color_discrete_sequence=['#ff7f0e'])
+        st.plotly_chart(fig_infraccion, use_container_width=True)
 
 st.divider()
 
 # 6. Tabla de Detalles
 st.subheader("📑 Detalle de Multas")
-
-st.dataframe(df_filtrado[['Año', 'Región', 'Ciudad', 'Resolución', 'Tipo de Infracción', 'Estado Actual', 'Responsable', 'Costo Monetario Real']])
-
-
-
-
-
+# Mostramos las columnas más relevantes si existen
+columnas_mostrar = [col for col in ['Año', 'Región', 'Ciudad', 'Resolución', 'Tipo de Infracción', 'Estado Actual', 'Responsable', 'Costo Monetario Real'] if col in df_filtrado.columns]
+st.dataframe(df_filtrado[columnas_mostrar])
