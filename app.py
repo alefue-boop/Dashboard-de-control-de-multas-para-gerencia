@@ -9,21 +9,38 @@ st.title("📊 Dashboard de Control de Multas - Inspección del Trabajo")
 # 2. Función para cargar y limpiar los datos automáticamente
 @st.cache_data
 def load_data():
-    # Cargar archivo saltando las filas de encabezado vacías
+    # 1. Intentar leer el archivo normal (separado por comas y saltando 4 filas)
     df = pd.read_csv("MULTAS.csv", skiprows=4, encoding="latin-1", on_bad_lines="skip")
+    
+    # 2. Si no encuentra la columna 'Año', intentamos con punto y coma (formato Excel Chile)
+    if 'Año' not in df.columns:
+        df = pd.read_csv("MULTAS.csv", skiprows=4, sep=";", encoding="latin-1", on_bad_lines="skip")
+        
+    # 3. Si aún no la encuentra, es porque se borraron las filas vacías de arriba al guardar
+    if 'Año' not in df.columns:
+        df = pd.read_csv("MULTAS.csv", sep=";", encoding="latin-1", on_bad_lines="skip")
+        if 'Año' not in df.columns:
+            df = pd.read_csv("MULTAS.csv", encoding="latin-1", on_bad_lines="skip")
+            
+    # Limpiar espacios ocultos en los nombres de las columnas
+    df.columns = df.columns.str.strip()
     
     # Limpieza básica
     df = df.dropna(subset=['Costo Monetario', 'Año']).copy()
     df['Año'] = df['Año'].astype(int).astype(str) # Convertir a texto para filtros
     
     # Estandarizar textos
-    df['Estado Actual'] = df['Estado Actual'].str.upper().str.strip()
+    df['Estado Actual'] = df['Estado Actual'].astype(str).str.upper().str.strip()
     df['Estado Actual'] = df['Estado Actual'].replace({'PAGADO': 'PAGADA', 'SIN EFECTO': 'DEJA SIN EFECTO'})
-    df['Responsable'] = df['Responsable'].str.upper().str.strip()
+    df['Responsable'] = df['Responsable'].astype(str).str.upper().str.strip()
     
-    # Corregir el costo monetario (dividir por 10 según revisamos)
-    df['Costo Monetario Real'] = df['Costo Monetario'] / 10
-    return df
+    # Corregir el costo monetario
+    df['Costo Monetario Real'] = pd.to_numeric(df['Costo Monetario'], errors='coerce') / 10
+    
+    # Eliminar posibles filas que quedaron sin costo después de la conversión
+    df = df.dropna(subset=['Costo Monetario Real'])
+    
+       return df
 
 df = load_data()
 
@@ -92,4 +109,5 @@ st.divider()
 st.subheader("📑 Detalle de Multas")
 
 st.dataframe(df_filtrado[['Año', 'Región', 'Ciudad', 'Resolución', 'Tipo de Infracción', 'Estado Actual', 'Responsable', 'Costo Monetario Real']])
+
 
