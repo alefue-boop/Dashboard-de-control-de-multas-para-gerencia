@@ -98,12 +98,3 @@ def cargar_datos_comprobados():
     df = df.dropna(subset=['Costo Monetario Real'])
     
     # Columna en Millones solo para los gráficos
-    df['Costo en Millones (MM$)'] = df['Costo Monetario Real'] / 1000000
-    
-    return df
-
-df = cargar_datos_comprobados()
-
-# 3. Barra Lateral (Filtros interactivos)
-st.sidebar.header("Filtros del Dashboard")
-anio_filtro = st.sidebar.multiselect("Seleccionar Año:", options=sorted(
