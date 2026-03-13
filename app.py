@@ -7,10 +7,34 @@ import os
 st.set_page_config(page_title="Dashboard Multas RRHH", page_icon="📊", layout="wide")
 st.title("📊 Dashboard de Control de Multas - Inspección del Trabajo")
 
-# Función para formatear dinero al estilo chileno
+# Función para formatear dinero al estilo chileno ($ 2.500.000)
 def formato_clp(valor):
     if pd.isna(valor): return "$0"
     return f"${valor:,.0f}".replace(",", ".")
+
+# Traductor de números (Formato Chile a Nube)
+def arreglar_numeros(val):
+    val = str(val).strip()
+    if val in ['nan', 'None', '', 'NaN']: return None
+    
+    if ',' in val and '.' in val:
+        if val.rfind(',') > val.rfind('.'):
+            val = val.replace('.', '').replace(',', '.')
+        else:
+            val = val.replace(',', '')
+    elif ',' in val:
+        val = val.replace(',', '.')
+    elif '.' in val:
+        partes = val.split('.')
+        if len(partes) == 2 and len(partes[1]) <= 2:
+            pass 
+        else:
+            val = val.replace('.', '')
+            
+    try:
+        return float(val)
+    except:
+        return None
 
 # 2. Función Inteligente y Verificación de Base de Datos
 @st.cache_data
@@ -44,7 +68,6 @@ def cargar_datos_comprobados():
                              on_bad_lines="skip")
             df.columns = df.columns.str.strip()
             
-            # Arreglar la columna Año
             for col in df.columns:
                 if 'A' in col and 'o' in col and len(col) <= 4:
                     df.rename(columns={col: 'Año'}, inplace=True)
@@ -70,11 +93,11 @@ def cargar_datos_comprobados():
     df['Estado Actual'] = df['Estado Actual'].replace({'PAGADO': 'PAGADA', 'SIN EFECTO': 'DEJA SIN EFECTO'})
     df['Responsable'] = df['Responsable'].astype(str).str.upper().str.strip()
     
-    # Extraer el monto de forma segura, ignorando errores de formato
-    df['Costo Monetario Real'] = pd.to_numeric(df['Costo Monetario'].astype(str).str.replace(',', '.'), errors='coerce')
+    # Aplicar el traductor inteligente de montos
+    df['Costo Monetario Real'] = df['Costo Monetario'].apply(arreglar_numeros)
     df = df.dropna(subset=['Costo Monetario Real'])
     
-    # Crear una nueva columna específica para los gráficos (en Millones)
+    # Columna en Millones solo para los gráficos
     df['Costo en Millones (MM$)'] = df['Costo Monetario Real'] / 1000000
     
     return df
@@ -83,10 +106,4 @@ df = cargar_datos_comprobados()
 
 # 3. Barra Lateral (Filtros interactivos)
 st.sidebar.header("Filtros del Dashboard")
-anio_filtro = st.sidebar.multiselect("Seleccionar Año:", options=sorted(df['Año'].unique()), default=sorted(df['Año'].unique()))
-resp_filtro = st.sidebar.multiselect("Seleccionar Responsable:", options=df['Responsable'].dropna().unique(), default=df['Responsable'].dropna().unique())
-estado_filtro = st.sidebar.multiselect("Estado de la Multa:", options=df['Estado Actual'].dropna().unique(), default=df['Estado Actual'].dropna().unique())
-
-df_filtrado = df[
-    (df['Año'].isin(anio_filtro)) & 
-    (df['Responsable
+anio_filtro = st.sidebar.multiselect("Seleccionar Año:", options=sorted(
