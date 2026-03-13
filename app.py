@@ -58,7 +58,7 @@ def load_data():
     # Eliminar posibles filas que quedaron sin costo después de la conversión
     df = df.dropna(subset=['Costo Monetario Real'])
     
-       return df
+    return df
 
 df = load_data()
 
@@ -127,6 +127,7 @@ st.divider()
 st.subheader("📑 Detalle de Multas")
 
 st.dataframe(df_filtrado[['Año', 'Región', 'Ciudad', 'Resolución', 'Tipo de Infracción', 'Estado Actual', 'Responsable', 'Costo Monetario Real']])
+
 
 
 
